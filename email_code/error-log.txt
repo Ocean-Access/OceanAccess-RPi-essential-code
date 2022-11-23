@@ -1,0 +1,13 @@
+
+[SSL: WRONG_VERSION_NUMBER] wrong version number (_ssl.c:1123)       /      
+ 
+[SSL: WRONG_VERSION_NUMBER] wrong version number (_ssl.c:1123)       /      
+ 
+[SSL: WRONG_VERSION_NUMBER] wrong version number (_ssl.c:1123)       /      
+ 
+(535, b'5.7.8 Username and Password not accepted. Learn more at\n5.7.8  https://support.google.com/mail/?p=BadCredentials h7sm1519694lji.112 - gsmtp')       /      
+ 
+(535, b'5.7.8 Username and Password not accepted. Learn more at\n5.7.8  https://support.google.com/mail/?p=BadCredentials s9sm1443225lfr.304 - gsmtp')       /      
+ 
+(535, b'5.7.8 Username and Password not accepted. Learn more at\n5.7.8  https://support.google.com/mail/?p=BadCredentials b13sm1300328lfv.200 - gsmtp')       /      
+ 
