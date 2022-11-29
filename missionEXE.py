@@ -7,8 +7,10 @@ import serial
 from brping import Ping1D
 import math
 import time
+import datetime
 import sys
 import os
+import requests
 sys.path.append("/home/pi/ping-python/kellerLD")
 try:
     from kellerLD import KellerLD
@@ -17,6 +19,8 @@ except:
 import argparse
 import calendar
 from builtins import input
+
+BAUDRATE = 9600
 
 class DriverFault(Exception):
     def __init__(self, driver_num):
@@ -27,79 +31,27 @@ def raiseIfFault():
         raise DriverFault(1)
     if motors.motor2.getFault():
         raise DriverFault(2)
+        
 def FindCorrectPort(examplecommand):
-    try:
-        ser = serial.Serial("/dev/ttyÙSB0")    #Open named port 
-        ser.baudrate = 9600#Set baud rate to 9600
-        ser.write(examplecommand)
-        reading=ser.read(ser.inWaiting())
-        if len(reading)<5:
-            raise Exception("Wrong port")
-        else:
-            return "/dev/ttyUSB0"
-            
-    except:
+    for i in range(5):
+        print(f"Trying ttyUSB{i}")
         try:
-            ser = serial.Serial ("/dev/ttyUSB0")    #Open named port 
-            ser.baudrate = 9600#Set baud rate to 9600
+            ser = serial.Serial(f"/dev/ttyUSB{i}", baudrate=BAUDRATE)
             ser.write(examplecommand)
-            reading=ser.read(ser.inWaiting())
-            if len(reading)<5:
-                raise Exception("Wrong port")
-            else:
-                return "/dev/ttyUSB0"
-            
-        except:
-            try:
-                ser = serial.Serial ("/dev/ttyUSB1")    #Open named port 
-                ser.baudrate = 9600#Set baud rate to 9600
-                ser.write(examplecommand)
-                reading=ser.read(ser.inWaiting())
-                if len(reading)<5:
-                    raise Exception("Wrong port")
-                else:
-                    return "/dev/ttyUSB1"
-            except:
-                try:
-                    ser = serial.Serial ("/dev/ttyUSB2")    #Open named port 
-                    ser.baudrate = 9600#Set baud rate to 9600
-                    ser.write(examplecommand)
-                    reading=ser.read(ser.inWaiting())
-                    if len(reading)<5:
-                        raise Exception("Wrong port")
-                    else:
-                        return "/dev/ttyUSB2"
-            
-                except: 
-                    try:
-                        ser = serial.Serial ("/dev/ttyUSB3")    #Open named port 
-                        ser.baudrate = 9600#Set baud rate to 9600
-                        ser.write(examplecommand)
-                        reading=ser.read(ser.inWaiting())
-                        if len(reading)<5:
-                            raise Exception("Wrong port")
-                        else:
-                            return "/dev/ttyUSB3"
-                        
-                    except:
-                        try:
-                            ser = serial.Serial ("/dev/ttyUSB4")    #Open named port 
-                            ser.baudrate = 9600#Set baud rate to 9600
-                            ser.write(examplecommand)
-                            reading=ser.read(ser.inWaiting())
-                            if len(reading)<5:
-                                raise Exception("Wrong port")
-                            else:
-                                return "/dev/ttyUSB2"
-                        except:
-                            print(" \n Could not find a suitable port \n")
+            time.sleep(1)
+            reading = ser.read(ser.inWaiting())
+            if len(reading) > 0:
+                print(f"Identified correct port {i}")
+                print(reading)
+                return f"/dev/ttyUSB{i}"
+        except Exception as e:
+            print(f"ttyUSB{i} was not the right port. The Exception is {e}")
 #def AssignUSB(device_port):
 #    context=Context()
 #    device=Devices.from_device_file(context,'/dev/ttyUSB0')
 #    print(device)
     #for device in context.list_devices(subsystem='block', DEVTYPE='partition'):
     #    print(device) 
-    
 
 def Accelerometer(runtime,directory):
     #Need to use Frequency for something later, so this is workaround
@@ -132,47 +84,30 @@ def Accelerometer(runtime,directory):
     
 def BlueRoboticsSonar(runtime,directory):
     #init
-    myPing = Ping1D()
-    myPing.connect_serial("/dev/ttyUSB_BRS", 115200)
     try:
         myPing = Ping1D()
         myPing.connect_serial("/dev/ttyUSB_BRS", 115200)
     except:
-        try:
-            myPing = Ping1D()
-            myPing.connect_serial("/dev/ttyUSB0", 115200)
-        except:
+        for i in range(5):
             try:
                 myPing = Ping1D()
-                myPing.connect_serial("/dev/ttyUSB1", 115200)
+                myPing.connect_serial(f"/dev/ttyUSB{i}", 115200)
+                break
             except:
-                try:
-                    myPing = Ping1D()
-                    myPing.connect_serial("/dev/ttyUSB2", 115200)
-                except: 
-                    try:
-                        myPing = Ping1D()
-                        myPing.connect_serial("/dev/ttyUSB3", 115200)
-                    except:
-                        try:
-                            myPing = Ping1D()
-                            myPing.connect_serial("/dev/ttyUSB4", 115200)
-                        except:
-                            print(name," does not work \n")
-    filename=os.path.join(directory,"BlueRoboticsSonar.txt")
-    file=open(filename,'a')
-    file.write("\n sampling started at :")
-    file.write(time.strftime("%a, %d %b %Y %H:%M:%S +0000 \n ", time.gmtime()))
-    
-    time_run=0
-    while (time_run<runtime):
+                pass
+    start = time.time()
+    data_list = []
+    while (time.time() - start < runtime):
         data = myPing.get_distance()
         if data:
-            file.write("Distance: %s\tConfidence: %s%%" % (data["distance"], data["confidence"]))
+            data_list.append("Distance: %s\tConfidence: %s%%" % (data["distance"], data["confidence"]))
         else:
-            file.write("Distance: NONE \tConfidence: NONE")
-        time.sleep(0.04)
-        time_run+=0.1
+            data_list.append("Distance: NONE \tConfidence: NONE")
+    filename=os.path.join(directory,"BlueRoboticsSonar.txt")
+    file=open(filename,'a')
+    file.write("\nsampling started at :")
+    file.write(time.strftime("%a, %d %b %Y %H:%M:%S +0000 \n", time.gmtime()))
+    file.write("\n".join(data_list))
     file.close()
 
 def BlueRoboticsPressureSensor(runtime,directory):
@@ -181,7 +116,7 @@ def BlueRoboticsPressureSensor(runtime,directory):
     filename=os.path.join(directory,"BlueRoboticsPressure.txt")
     file=open(filename,'a')
     file.write("sampling started at :")
-    file.write(time.strftime("%a, %d %b %Y %H:%M:%S +0000 \n ", time.gmtime()))
+    file.write(time.strftime("%a, %d %b %Y %H:%M:%S +0000 \n", time.gmtime()))
     timer=0
     while (timer<runtime):
         sensor.read()
@@ -193,72 +128,98 @@ def BlueRoboticsPressureSensor(runtime,directory):
     
 def ISA500(runtime,directory,port="/dev/ttyUSB_ISA500"):
     bus=smbus.SMBus(1)
-    bus.write_i2c_block_data(0x18,0x10,[0x01]) #skal vaerer 0x01 på slutten
-    name="ISA500"
-    time.sleep(10)
-    port=FindCorrectPort(b'#p\r')
-    ser = serial.Serial(port)    #Open named port 
-    ser.baudrate = 9600#Set baud rate to 9600
+    bus.write_i2c_block_data(0x18,0x10,[0x02]) #skal vaerer 0x02 på slutten
+    firstcommand=("#p\r").encode()
+    secondcommand=("#o\r").encode()
+    time.sleep(5)
+    port=FindCorrectPort(firstcommand)
+    if port==None:
+        bus.write_i2c_block_data(0x18,0x10,[0x00])
+        raise Exception("Port not found error")
+    ser = serial.Serial(port, baudrate=BAUDRATE)    #Open named port 
     raiseIfFault() #check if the motor hat has gone to shit
     #motors.motor1.setSpeed(MAX_SPEED)
     time.sleep(5)
+    
+    timer=0
+    start=time.time()
+    data = []
+    data2 = []
+    # Need to find a better way to wait until data is processed before reading
+    # These times seem to work, but it would be better to poll the sensor to see if it is done or something.
+    while (time.time()-start< runtime):
+        ser.write(firstcommand)                         #send command string                
+        reading=ser.readline()               #read data in read buffer
+        data.append(reading.decode())
+        ser.write(secondcommand)
+        reading2=ser.readline()
+        data2.append(reading2.decode())
+    # write to files
     filename=os.path.join(directory,"ISA500.txt")
     file=open(filename,'a') #next three lines are to open a file and start writing to it
-    file.write("\n sampling started at :")
-    file.write(time.strftime("%a, %d %b %Y %H:%M:%S +0000 \n ", time.gmtime()))
+    file.write("\nsampling started at :")
+    file.write(time.strftime("%a, %d %b %Y %H:%M:%S +0000 \n", time.gmtime()))
     filename2=os.path.join(directory,"ISA500-ahrs.txt")
     file2=open(filename2,'a') #next three lines are to open a file and start writing to it
-    file2.write("\n sampling started at :")
-    file2.write(time.strftime("%a, %d %b %Y %H:%M:%S +0000 \n ", time.gmtime()))
-    timer=0
-    while (timer<runtime):
-        #commandline="#p<CR>"
-        ser.write(b'#p\r')                  #send command string 
-        reading=ser.read(ser.inWaiting())               #read data in read buffer
-        file.write(str(reading))
-        ser.write(b'#o\r')
-        reading2=ser.read(ser.inWaiting())
-        file2.write(str(reading2))
-        time.sleep(0.04)
-        timer+=0.1
+    file2.write("\nsampling started at :")
+    file2.write(time.strftime("%a, %d %b %Y %H:%M:%S +0000 \n", time.gmtime()))
+    file.write("".join(data))
+    file2.write("".join(data2))
     ser.close()
     file.close()
+    file2.close()
     bus.write_i2c_block_data(0x18,0x10,[0x00])
     
 def ISD4000(runtime, directory,port="/dev/ttyUSB_IDD"):
     bus=smbus.SMBus(1)
-    bus.write_i2c_block_data(0x18,0x10,[0x02]) #sskal vaere 0x02 paa sluttne
-    name="ISD4000"
-    time.sleep(10)
-    port=FindCorrectPort(b'#d\r')
-    ser = serial.Serial(port)    #Open named port 
-    ser.baudrate = 9600#Set baud rate to 9600
+    bus.write_i2c_block_data(0x18,0x10,[0x01]) #sskal vaere 0x02 paa sluttne
+    firstcommand=("#d\r").encode()
+    secondcommand=("#o\r").encode()
+    time.sleep(5)
+    port=FindCorrectPort(firstcommand)
+    if port==None:
+        bus.write_i2c_block_data(0x18,0x10,[0x00])
+        raise Exception("Port not found error")
+    ser = serial.Serial(port, baudrate=BAUDRATE)    #Open named port 
 
     raiseIfFault() #check if the motor hat has gone to shit
-    motors.motor2.setSpeed(MAX_SPEED)
+    #motors.motor2.setSpeed(MAX_SPEED)
     #time.sleep(5)
+    
+    data = []
+    data2 = []
+    start = time.time()
+    starts = []
+    ends = []
+    while (time.time() - start < runtime):
+        starts.append(time.time())
+        ser.write(firstcommand)                         #send command string        
+        reading=ser.readline()              #read data in read buffer
+        data.append(reading.decode())
+        ser.write(secondcommand)
+        reading2=ser.readline()
+        data2.append(reading2.decode())
+        ends.append(time.time())
     filename=os.path.join(directory,"ISD4000.txt")
     file=open(filename,'a') #next three lines are to open a file and start writing to it
     file.write("\nsampling started at :")
-    file.write(time.strftime("%a, %d %b %Y %H:%M:%S +0000 \n ", time.gmtime()))
+    file.write(time.strftime("%a, %d %b %Y %H:%M:%S +0000 \n", time.gmtime()))
     filename2=os.path.join(directory,"ISD4000-ahrs.txt")
     file2=open(filename2,'a') #next three lines are to open a file and start writing to it
     file2.write("\nsampling started at :")
     file2.write(time.strftime("%a, %d %b %Y %H:%M:%S +0000 \n ", time.gmtime()))
-    timer=0
-    while (timer<runtime):
-        #commandline="#p<CR>"
-        ser.write(b'#d\r')                  #send command string 
-        reading=ser.read(ser.inWaiting())               #read data in read buffer
-        file.write(str(reading))
-        ser.write(b'#o\r')
-        reading2=ser.read(ser.inWaiting())
-        file2.write(str(reading2))
-        time.sleep(0.1)
-        timer+=0.1
+    file.write("".join(data))
+    file2.write("".join(data2))
     ser.close()
     file.close()
     file2.close()
+
+    # Send to web
+    req_string = f"water-test,{datetime.datetime.now().isoformat()},{len(data) / runtime}\n"
+    req_string += "".join(data)
+    r = requests.put("http://192.168.1.13:3000/data", headers={'content-type': 'text/isd4000'}, data=req_string)
+    print(r)
+
     bus.write_i2c_block_data(0x18,0x10,[0x00])
     #motors.motor2.setSpeed(0)   
 
@@ -277,11 +238,12 @@ def ShutDownIf(start_time,dager):
     shutdown_condition=((time.time() - start_time) > (dager*24*60*60) )
     if (shutdown_condition):
         os.system('sudo shutdown')
-def ErrorHandler(directory, sensor):
+def ErrorHandler(directory, sensor, error):
     filename=os.path.join(directory,"error.txt")
     file=open(filename,'a')
     file.write("Error when trying to handle: ")
     file.write(sensor)
+    file.write(str(error))
     file.write("     /      ")
     file.close()
         
@@ -306,24 +268,26 @@ def Mission(runtime=600,samplings_per_day=8,num_sensors=5,days_of_battery=12,sta
         
         try:
             ISA500(runtime,directory)
-        except:
-            ErrorHandler(directory,"ISA500")
+        except Exception as e:
+            print(e)
+            ErrorHandler(directory,"ISA500",e)
         try:
             ISD4000(runtime,directory)
-        except:
-            ErrorHandler(directory,"ISD4000")
+        except Exception as e:
+            print(e)
+            ErrorHandler(directory,"ISD4000",e)
         try:
             BlueRoboticsSonar(runtime,directory)
-        except:
-            ErrorHandler(directory,"Blue Robotics Sonar")
+        except Exception as e:
+            ErrorHandler(directory,"Blue Robotics Sonar", e)
         try:
             BlueRoboticsPressureSensor(runtime,directory)
-        except:
-            ErrorHandler(directory,"Blue Robotics Pressure Sensor")
+        except Exception as e:
+            ErrorHandler(directory,"Blue Robotics Pressure Sensor", e)
         try:
             Accelerometer(runtime,directory)
-        except:
-            ErrorHandler(directory,"Accelerometer")
+        except Exception as e:
+            ErrorHandler(directory,"Accelerometer",e)
                 
         #ISA500(runtime,directory)
         #ISD4000(runtime,directory)
